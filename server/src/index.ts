@@ -19,105 +19,44 @@ if (!apiKey) {
 }
 const genAI = new GoogleGenerativeAI(apiKey);
 
-const systemInstruction = `
-You are an intelligent and user-friendly Election Assistant designed to help users understand the election process in India in a simple, interactive, and step-by-step way.
-
-Your responsibilities include:
-
-1. Explain the complete election process clearly:
-   * Voter registration
-   * Candidate nomination
-   * Campaigning
-   * Voting process
-   * Vote counting
-   * Result declaration
-
-2. Provide election timelines:
-   * Important dates (registration deadlines, voting dates, result dates)
-   * Explain each phase in a timeline format when asked
-
-3. Guide users step-by-step:
-   * Ask users relevant questions (age, location, voter status)
-   * Provide personalized instructions
-   * Example: "How to register to vote", "How to find polling booth"
-
-4. Keep responses:
-   * Simple and beginner-friendly
-   * Short but informative
-   * Structured using bullet points or steps
-
-5. Be interactive:
-   * Ask follow-up questions
-   * Offer options like:
-     * "Do you want to check eligibility?"
-     * "Do you want step-by-step voting guide?"
-
-6. Provide accurate India-specific information using official references like the Election Commission of India.
-
-7. Handle common queries such as:
-   * "Am I eligible to vote?"
-   * "How to apply for voter ID?"
-   * "What documents are required?"
-   * "How does voting work?"
-   * "What is NOTA?"
-
-8. If user is under 18:
-   * Politely inform they are not eligible yet
-   * Encourage future registration
-
-9. Maintain a helpful and neutral tone:
-   * Do NOT promote any political party
-   * Stay unbiased and informative
-
-10. If unsure:
-   * Say "Please check the official Election Commission website for confirmation."
-
-Always aim to make the election process easy to understand for first-time voters.
-Enhance responses with:
-* Step-by-step guides
-* Bullet points
-* Simple examples
-* Optional quick actions like: [Check Eligibility] [View Timeline] [Register Guide]
-
-If user asks about "timeline", show:
-* Ordered phases of election
-
-If user asks "how to vote", respond with:
-* Clear step-by-step process
-
-If user asks vague questions:
-* Ask clarifying questions before answering
-`;
-
-// Using the most stable model and configuration
+// Using the most stable model without the problematic systemInstruction field
 const model = genAI.getGenerativeModel({
   model: "gemini-1.5-flash",
-  systemInstruction: systemInstruction,
-}, { apiVersion: 'v1' });
+});
+
+const systemInstruction = `
+You are an intelligent and user-friendly Election Assistant designed to help users understand the election process in India in a simple, interactive, and step-by-step way.
+Stay unbiased, neutral, and helpful. Use bullet points and step-by-step guides.
+If you are unsure, refer to the Election Commission of India.
+`;
 
 app.post('/api/chat', async (req, res) => {
   const { messages } = req.body;
 
   try {
-    // Standardizing history format for the chat
+    // 1. Standardize history
     const rawHistory = messages.slice(0, -1)
       .map((m: any) => ({
         role: m.role === 'user' ? 'user' : 'model',
         parts: [{ text: m.content }],
       }));
 
-    // Find the first user message. History MUST start with 'user'.
+    // 2. Ensure history starts with user
     const firstUserIndex = rawHistory.findIndex((m: any) => m.role === 'user');
-    const history = firstUserIndex !== -1 ? rawHistory.slice(firstUserIndex) : [];
+    let history = firstUserIndex !== -1 ? rawHistory.slice(firstUserIndex) : [];
 
     const chat = model.startChat({
       history: history,
-      generationConfig: {
-        maxOutputTokens: 1000,
-      },
     });
 
-    const lastMessage = messages[messages.length - 1].content;
+    // 3. Get the last message
+    let lastMessage = messages[messages.length - 1].content;
+
+    // 4. If this is the start of the chat, prepend the instructions to the message
+    if (history.length === 0) {
+      lastMessage = `INSTRUCTIONS: ${systemInstruction}\n\nUSER MESSAGE: ${lastMessage}`;
+    }
+
     const result = await chat.sendMessage(lastMessage);
     const response = await result.response;
     const text = response.text();
