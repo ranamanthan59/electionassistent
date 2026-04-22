@@ -90,7 +90,7 @@ If user asks vague questions:
 `;
 
 const model = genAI.getGenerativeModel({
-  model: "gemini-1.5-flash",
+  model: "gemini-1.5-pro",
   systemInstruction: systemInstruction,
 });
 
@@ -115,9 +115,15 @@ app.post('/api/chat', async (req, res) => {
     const lastMessage = messages[messages.length - 1].content;
     const result = await chat.sendMessage(lastMessage);
     const response = await result.response;
-    res.json({ content: response.text() });
+    const text = response.text();
+    
+    if (!text) {
+      throw new Error('Empty response from Gemini');
+    }
+
+    res.json({ content: text });
   } catch (error: any) {
-    console.error('CHAT ERROR:', error.message || error);
+    console.error('FULL CHAT ERROR:', error);
     res.status(500).json({ error: error.message || 'Failed to get response from Gemini AI' });
   }
 });
