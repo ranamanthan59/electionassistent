@@ -14,6 +14,8 @@ app.use(express.json());
 const apiKey = process.env.GEMINI_API_KEY || '';
 if (!apiKey) {
   console.error('ERROR: GEMINI_API_KEY is not defined in the environment!');
+} else {
+  console.log(`API Key detected. Length: ${apiKey.length}. Starts with: ${apiKey.substring(0, 4)}...`);
 }
 const genAI = new GoogleGenerativeAI(apiKey);
 
