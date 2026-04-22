@@ -85,7 +85,7 @@ If user asks vague questions:
 `;
 
 const model = genAI.getGenerativeModel({
-  model: "gemini-flash-lite-latest",
+  model: "gemini-1.5-flash",
   systemInstruction: systemInstruction,
 });
 
