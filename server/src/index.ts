@@ -12,6 +12,9 @@ app.use(cors());
 app.use(express.json());
 
 const apiKey = process.env.GEMINI_API_KEY || '';
+if (!apiKey) {
+  console.error('ERROR: GEMINI_API_KEY is not defined in the environment!');
+}
 const genAI = new GoogleGenerativeAI(apiKey);
 
 const systemInstruction = `
@@ -86,6 +89,7 @@ If user asks vague questions:
 
 const model = genAI.getGenerativeModel({
   model: "gemini-1.5-flash",
+  systemInstruction: systemInstruction,
 });
 
 app.post('/api/chat', async (req, res) => {
