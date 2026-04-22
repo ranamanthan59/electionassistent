@@ -18,49 +18,55 @@ app.get('/', (req, res) => {
 const apiKey = process.env.GEMINI_API_KEY || '';
 const genAI = new GoogleGenerativeAI(apiKey);
 
-// Using the absolute most compatible model name and stable API version
+// Using the 'latest' alias which is usually the most resilient
 const model = genAI.getGenerativeModel({
-  model: "gemini-pro",
-}, { apiVersion: 'v1' });
+  model: "gemini-1.5-flash-latest",
+});
 
 const systemInstruction = `
 You are an intelligent and user-friendly Election Assistant designed to help users understand the election process in India.
 Stay unbiased, neutral, and helpful. Use bullet points.
-If you are unsure, refer to the Election Commission of India.
 `;
 
 app.post('/api/chat', async (req, res) => {
   const { messages } = req.body;
 
   try {
-    const rawHistory = messages.slice(0, -1)
+    if (!messages || messages.length === 0) {
+      return res.status(400).json({ error: 'No messages provided' });
+    }
+
+    // Standardize history
+    const history = messages.slice(0, -1)
       .map((m: any) => ({
         role: m.role === 'user' ? 'user' : 'model',
-        parts: [{ text: m.content }],
-      }));
-
-    const firstUserIndex = rawHistory.findIndex((m: any) => m.role === 'user');
-    let history = firstUserIndex !== -1 ? rawHistory.slice(firstUserIndex) : [];
+        parts: [{ text: String(m.content) }],
+      }))
+      .filter((m: any, i: number, arr: any[]) => {
+        // Ensure no consecutive roles and starts with user
+        if (i === 0 && m.role !== 'user') return false;
+        if (i > 0 && m.role === arr[i-1].role) return false;
+        return true;
+      });
 
     const chat = model.startChat({
       history: history,
     });
 
-    let lastMessage = messages[messages.length - 1].content;
+    let lastMessage = String(messages[messages.length - 1].content);
 
-    // Prepend instructions if starting a new conversation
+    // If it's a new chat, add instructions
     if (history.length === 0) {
       lastMessage = `${systemInstruction}\n\nUser Question: ${lastMessage}`;
     }
 
     const result = await chat.sendMessage(lastMessage);
-    const response = await result.response;
-    const text = response.text();
+    const text = result.response.text();
     
     res.json({ content: text });
   } catch (error: any) {
-    console.error('FINAL ATTEMPT ERROR:', error.message || error);
-    res.status(500).json({ error: error.message || 'Failed to get response from Gemini AI' });
+    console.error('BACKEND ERROR:', error.message || error);
+    res.status(500).json({ error: 'Gemini is having a moment. Please try one more time.' });
   }
 });
 
