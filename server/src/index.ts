@@ -33,14 +33,18 @@ app.post('/api/chat', async (req, res) => {
 
   try {
     // Standardizing history format for the chat
-    const history = messages.slice(0, -1)
+    const rawHistory = messages.slice(0, -1)
       .map((m: any) => ({
         role: m.role === 'user' ? 'user' : 'model',
         parts: [{ text: m.content }],
       }));
 
+    // Find the first user message. History MUST start with 'user'.
+    const firstUserIndex = rawHistory.findIndex((m: any) => m.role === 'user');
+    const history = firstUserIndex !== -1 ? rawHistory.slice(firstUserIndex) : [];
+
     const chat = model.startChat({
-      history: history.length > 0 ? history : [],
+      history: history,
       generationConfig: {
         maxOutputTokens: 1000,
       },
