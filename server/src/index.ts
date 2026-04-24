@@ -1,7 +1,12 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import { GoogleGenerativeAI } from '@google/generative-ai';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 dotenv.config();
 
@@ -11,12 +16,15 @@ const port = process.env.PORT || 3001;
 app.use(cors());
 app.use(express.json());
 
-app.get('/', (req, res) => res.send('Election Assistant Server is running!'));
+// Serve static files from the React app
+const clientDistPath = path.join(__dirname, '../../client/dist');
+app.use(express.static(clientDistPath));
+
+app.get('/health', (req, res) => res.send('OK'));
 
 const apiKey = process.env.GEMINI_API_KEY || '';
 const genAI = new GoogleGenerativeAI(apiKey);
 
-// We will try these models in order, prioritizing 'lite' models which often have separate quotas
 const MODEL_NAMES = [
   "gemini-2.0-flash-lite", 
   "gemini-flash-lite-latest",
@@ -30,9 +38,10 @@ const systemInstruction = "You are an intelligent Indian Election Assistant. Hel
 
 app.post('/api/chat', async (req, res) => {
   const { messages } = req.body;
+  console.log(`[${new Date().toISOString()}] Received chat request with ${messages.length} messages`);
+
   console.log(`Received request with ${messages.length} messages`);
 
-  // Try each model until one works
   for (const modelName of MODEL_NAMES) {
     try {
       console.log(`Attempting to use model: ${modelName} (v1beta)`);
@@ -49,7 +58,6 @@ app.post('/api/chat', async (req, res) => {
           return true;
         });
 
-      console.log(`History length: ${history.length}`);
       const chat = model.startChat({ history });
       let lastMessage = String(messages[messages.length - 1].content);
 
@@ -57,18 +65,14 @@ app.post('/api/chat', async (req, res) => {
         lastMessage = `${systemInstruction}\n\nUser Question: ${lastMessage}`;
       }
 
-      console.log(`Sending message: ${lastMessage.substring(0, 50)}...`);
       const result = await chat.sendMessage(lastMessage);
       const text = result.response.text();
       
       console.log(`Success with ${modelName}!`);
-      // If we got here, it worked! Return the response.
       return res.json({ content: text });
 
     } catch (error: any) {
       console.error(`Model ${modelName} failed:`, error.message);
-      if (error.stack) console.error(error.stack);
-      // If it's a 404, we continue to the next model in the loop
       if (modelName === MODEL_NAMES[MODEL_NAMES.length - 1]) {
         return res.status(500).json({ error: `All Gemini models failed. Last error: ${error.message}` });
       }
@@ -76,4 +80,12 @@ app.post('/api/chat', async (req, res) => {
   }
 });
 
-app.listen(port, () => console.log(`Server running on port ${port}`));
+// FIX: Express 5.x catch-all syntax
+app.get('*path', (req, res) => {
+  res.sendFile(path.join(clientDistPath, 'index.html'));
+});
+
+app.listen(port, () => {
+  console.log(`Server running on port ${port}`);
+  console.log(`Serving client from: ${clientDistPath}`);
+});
