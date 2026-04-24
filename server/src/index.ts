@@ -16,19 +16,27 @@ app.get('/', (req, res) => res.send('Election Assistant Server is running!'));
 const apiKey = process.env.GEMINI_API_KEY || '';
 const genAI = new GoogleGenerativeAI(apiKey);
 
-// We will try these models in order
-const MODEL_NAMES = ["gemini-1.5-flash", "gemini-pro", "gemini-1.5-flash-latest"];
+// We will try these models in order, prioritizing 'lite' models which often have separate quotas
+const MODEL_NAMES = [
+  "gemini-2.0-flash-lite", 
+  "gemini-flash-lite-latest",
+  "gemini-2.0-flash", 
+  "gemini-flash-latest", 
+  "gemini-pro-latest",
+  "gemini-2.5-flash-lite"
+];
 
 const systemInstruction = "You are an intelligent Indian Election Assistant. Help users understand the voting process in India clearly and neutrally.";
 
 app.post('/api/chat', async (req, res) => {
   const { messages } = req.body;
+  console.log(`Received request with ${messages.length} messages`);
 
   // Try each model until one works
   for (const modelName of MODEL_NAMES) {
     try {
-      console.log(`Attempting to use model: ${modelName}`);
-      const model = genAI.getGenerativeModel({ model: modelName });
+      console.log(`Attempting to use model: ${modelName} (v1beta)`);
+      const model = genAI.getGenerativeModel({ model: modelName }, { apiVersion: 'v1beta' });
       
       const history = messages.slice(0, -1)
         .map((m: any) => ({
@@ -41,6 +49,7 @@ app.post('/api/chat', async (req, res) => {
           return true;
         });
 
+      console.log(`History length: ${history.length}`);
       const chat = model.startChat({ history });
       let lastMessage = String(messages[messages.length - 1].content);
 
@@ -48,17 +57,20 @@ app.post('/api/chat', async (req, res) => {
         lastMessage = `${systemInstruction}\n\nUser Question: ${lastMessage}`;
       }
 
+      console.log(`Sending message: ${lastMessage.substring(0, 50)}...`);
       const result = await chat.sendMessage(lastMessage);
       const text = result.response.text();
       
+      console.log(`Success with ${modelName}!`);
       // If we got here, it worked! Return the response.
       return res.json({ content: text });
 
     } catch (error: any) {
       console.error(`Model ${modelName} failed:`, error.message);
+      if (error.stack) console.error(error.stack);
       // If it's a 404, we continue to the next model in the loop
       if (modelName === MODEL_NAMES[MODEL_NAMES.length - 1]) {
-        return res.status(500).json({ error: "All Gemini models are currently unavailable. Please check your API key permissions." });
+        return res.status(500).json({ error: `All Gemini models failed. Last error: ${error.message}` });
       }
     }
   }
