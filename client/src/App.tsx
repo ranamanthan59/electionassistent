@@ -4,7 +4,6 @@ import {
   Bot, 
   User, 
   Loader2, 
-  ChevronRight, 
   Info, 
   ExternalLink, 
   CheckCircle2, 
@@ -12,7 +11,6 @@ import {
   UserPlus, 
   HelpCircle,
   Menu,
-  X,
   History,
   ShieldCheck,
   Flag
